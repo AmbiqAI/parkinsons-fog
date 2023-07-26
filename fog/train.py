@@ -80,6 +80,7 @@ def train(params: TrainParams):
                 num_encoders=params.num_encoders,
                 num_lstms=params.num_lstms,
                 num_heads=params.num_heads,
+                batch_size=params.batch_size,
                 training=True,
                 dropout=params.dropout,
             ),
@@ -129,6 +130,7 @@ def train(params: TrainParams):
                 epochs=params.epochs,
                 steps_per_epoch=params.steps_per_epoch,
                 callbacks=model_callbacks,
+                validation_data=val_ds
             )
         except KeyboardInterrupt:
             logger.warning("Stopping training due to keyboard interrupt")

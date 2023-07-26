@@ -39,7 +39,7 @@ def fog_encoder(
     dropout: float = 0,
 ):
     def layer(x: tf.Tensor) -> tf.Tensor:
-        sequence_len = block_size / patch_size
+        sequence_len = block_size // patch_size
         y = tf.keras.layers.Dense(model_dim)(x)
         pos_encoder = tf.tile(
             tf.Variable(
@@ -60,13 +60,13 @@ def fog_encoder(
                 axis=batch_size * [1],
             )
 
-        y = tf.keras.layers.Add()[y, pos_encoder]
+        y = tf.keras.layers.Add()([y, pos_encoder])
         y = tf.keras.layers.Dropout(dropout)(y)
         for _ in range(num_encoders):
             y = encoder(num_heads=num_heads, model_dim=model_dim, dropout=dropout)(y)
         for _ in range(num_lstms):
-            y = tf.keras.layers.LSTM(model_dim, return_sequences=True)(y)
-            y = tf.keras.layers.Bidirectional()(y)
+            y = tf.keras.layers.Bidirectional(tf.keras.layers.LSTM(model_dim, return_sequences=True))(y)
+        return y
     return layer
 
 def fog_model(

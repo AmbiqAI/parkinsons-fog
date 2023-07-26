@@ -10,6 +10,7 @@ import numpy as np
 import numpy.typing as npt
 import h5py
 import sklearn
+import sklearn.model_selection
 from tqdm import tqdm
 from .preprocess import resample_signal, normalize_signal, resample_categorical
 
@@ -29,11 +30,13 @@ class FogDataset:
 
     @property
     def features(self) -> list[str]:
+        """Features"""
         return ['AccV', 'AccML', 'AccAP']
 
     @property
     def targets(self) -> list[str]:
-        return ['StartHesitation', 'Turn', 'Walking']  # , 'Valid', 'Task']
+        """Targets"""
+        return ['StartHesitation', 'Turn', 'Walking' , 'Valid', 'Task']
 
     @property
     def sampling_rate(self) -> int:
@@ -46,7 +49,7 @@ class FogDataset:
         return self.block_size // self.patch_size
 
     @property
-    def get_subject_ids(self) -> list[str]:
+    def subject_ids(self) -> list[str]:
         """Get subject ids"""
         return [
             # tdcsfog
@@ -73,12 +76,12 @@ class FogDataset:
         ]
 
     @functools.cached_property
-    def get_train_subject_ids(self) -> list[str]:
+    def train_subject_ids(self) -> list[str]:
         """Get train subject ids"""
-        return list(filter(lambda x: x not in self.get_test_subject_ids, self.get_subject_ids))
+        return list(filter(lambda x: x not in self.test_subject_ids, self.subject_ids))
 
     @property
-    def get_test_subject_ids(self) -> list[str]:
+    def test_subject_ids(self) -> list[str]:
         """Get test subject ids"""
         return [
             # tdcsfog
@@ -106,10 +109,11 @@ class FogDataset:
             for _ in range(samples_per_subject):
                 # Randomly choose a record
                 record = records[np.random.choice(list(records.keys()))]
-                record_len: int = records[record].shape[0]
-                block_start = np.random.randint(record_len - self.block_size)
+                if record.shape[0] < self.block_size:
+                    continue
+                block_start = np.random.randint(record.shape[0] - self.block_size)
                 block_end = block_start + self.block_size
-                data = records[record][block_start:block_end]
+                data = record[block_start:block_end]
                 data = tf.reshape(data, shape=(self.frame_size, self.patch_size, data.shape[1]))
 
                 # Create input ('AccV', 'AccML', 'AccAP')
@@ -142,12 +146,17 @@ class FogDataset:
         Returns:
             SubjectGenerator: Subject generator
         """
-        subject_ids = subject_ids or self.get_subject_ids
+        if subject_ids is None:
+            subject_ids = self.subject_ids
+        subject_idxs = list(range(len(subject_ids)))
         while True:
             if shuffle:
-                subject_ids = random.sample(subject_ids, len(subject_ids))
-            for subject_id in subject_ids:
-                with h5py.File(os.path.join(self.ds_path, f"{subject_id}.h5"), mode="r") as h5:
+                random.shuffle(subject_idxs)
+            for subject_idx in subject_idxs:
+                subject_id = subject_ids[subject_idx]
+                with h5py.File(os.path.join(self.ds_path, f"{subject_id.decode('ascii')}.h5"), mode="r") as h5:
+                    if "data" not in h5:
+                        continue
                     yield subject_id, h5["data"]
                 # END WITH
             # END FOR
@@ -181,7 +190,7 @@ class FogDataset:
         samples_per_subject = samples_per_subject or 100
 
         # Get train subjects
-        train_subject_ids = self.get_train_subject_ids
+        train_subject_ids = self.train_subject_ids
 
         # Use subset of training subjects
         if train_subjects is not None:
@@ -232,7 +241,7 @@ class FogDataset:
         Returns:
             tf.data.Dataset: Test dataset
         """
-        test_subject_ids = self.get_test_subject_ids
+        test_subject_ids = self.test_subject_ids
 
         if test_subjects is not None:
             num_pts = int(test_subjects) if test_subjects > 1 else int(test_subjects * len(test_subject_ids))
@@ -336,7 +345,7 @@ class FogDataset:
             SampleGenerator: Task sample generator
         """
         subject_generator = self.uniform_subject_generator(subject_ids, repeat=repeat)
-        data_generator = self.task_data_generator(
+        data_generator = self.data_generator(
             subject_generator,
             samples_per_subject=samples_per_subject,
         )
@@ -355,7 +364,10 @@ class FogDataset:
             for subject_id in tqdm(subject_ids, desc='Preparing'):
                 with h5py.File(os.path.join(self.ds_path, f"{subject_id}.h5"), "w") as h5:
                     for record_id in metadata_df[metadata_df.Subject == subject_id].index:
-                        series = pd.read_csv(os.path.join(self.ds_path, f"train", dataset, f"{record_id}.csv"))
+                        record_path = os.path.join(self.ds_path, f"train", dataset, f"{record_id}.csv")
+                        if not os.path.isfile(record_path):
+                            continue
+                        series = pd.read_csv(record_path)
                         if dataset in ['tdcsfog']:
                             fs = 128
                             factor = 1 # m/s^2 -> m/s^2
@@ -379,7 +391,6 @@ class FogDataset:
                             axis=0
                         )
                         data = np.hstack((acc_data, tgt_data))
-                        print(tgt_data.shape, tgt_data.dtype)
                         h5.create_dataset(f"/data/{record_id}", data=data, compression="gzip")
                     # END FOR
                 # END WITH
