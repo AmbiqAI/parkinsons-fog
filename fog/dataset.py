@@ -132,7 +132,7 @@ class FogDataset:
 
     def uniform_subject_generator(
         self,
-        subject_ids: list[str] | None,
+        subject_ids: list[str] | None = None,
         repeat: bool = True,
         shuffle: bool = True,
     ) -> SubjectGenerator:
@@ -154,7 +154,9 @@ class FogDataset:
                 random.shuffle(subject_idxs)
             for subject_idx in subject_idxs:
                 subject_id = subject_ids[subject_idx]
-                with h5py.File(os.path.join(self.ds_path, f"{subject_id.decode('ascii')}.h5"), mode="r") as h5:
+                if isinstance(subject_id, bytes):
+                    subject_id = subject_id.decode('ascii')
+                with h5py.File(os.path.join(self.ds_path, f"{subject_id}.h5"), mode="r") as h5:
                     if "data" not in h5:
                         continue
                     yield subject_id, h5["data"]
@@ -354,8 +356,7 @@ class FogDataset:
 
 
     def prepare_dataset(self):
-        """Prepare dataset
-        """
+        """Prepare dataset."""
         datasets = ['tdcsfog', 'defog']
         for dataset in datasets:
             metadata_df = pd.read_csv(os.path.join(self.ds_path, f"{dataset}_metadata.csv")).set_index('Id')
@@ -385,7 +386,7 @@ class FogDataset:
                         )
                         acc_data = normalize_signal(factor*acc_data, axis=0)
                         tgt_data = resample_categorical(
-                            series[['StartHesitation', 'Turn', 'Walking', 'Valid', 'Task']].values.astype(np.float32),
+                            series[self.targets].values.astype(np.float32),
                             sample_rate=fs,
                             target_rate=self.sampling_rate,
                             axis=0

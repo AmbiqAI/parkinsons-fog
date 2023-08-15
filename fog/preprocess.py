@@ -1,15 +1,45 @@
 import math
+import functools
+
 import scipy.signal as sps
 import scipy.interpolate as spi
-import tensorflow as tf
 import numpy as np
 import numpy.typing as npt
 
-def sample_normalize(sample):
-    mean = tf.math.reduce_mean(sample)
-    std = tf.math.reduce_std(sample)
-    sample = tf.math.divide_no_nan(sample-mean, std)
-    return sample.numpy()
+
+@functools.cache
+def get_butter_sos(
+    lowcut: float | None = None,
+    highcut: float | None = None,
+    sample_rate: float = 1000,
+    order: int = 2,
+) -> npt.NDArray:
+    """Compute biquad filter coefficients as SOS. This function caches.
+
+    Args:
+        lowcut (float|None): Lower cutoff in Hz. Defaults to None.
+        highcut (float|None): Upper cutoff in Hz. Defaults to None.
+        sample_rate (float): Sampling rate in Hz. Defaults to 1000 Hz.
+        order (int, optional): Filter order. Defaults to 2.
+
+    Returns:
+        npt.NDArray: SOS
+    """
+    nyq = sample_rate / 2
+    if lowcut is not None and highcut is not None:
+        freqs = [lowcut / nyq, highcut / nyq]
+        btype = "bandpass"
+    elif lowcut is not None:
+        freqs = lowcut / nyq
+        btype = "highpass"
+    elif highcut is not None:
+        freqs = highcut / nyq
+        btype = "lowpass"
+    else:
+        raise ValueError("At least one of lowcut or highcut must be specified")
+    sos = sps.butter(order, freqs, btype=btype, output="sos")
+    return sos
+
 
 def resample_categorical(data: npt.NDArray, sample_rate: float, target_rate: float, axis: int = 0) -> npt.NDArray:
     """Resample categorical data using nearest neighbor.
@@ -64,28 +94,29 @@ def normalize_signal(data: npt.NDArray, eps: float = 1e-3, axis: int = 0) -> npt
     std = np.nanstd(data, axis=axis) + eps
     return (data - mu) / std
 
+def filter_signal(
+    data: npt.NDArray,
+    lowcut: float | None = None,
+    highcut: float | None = None,
+    sample_rate: float = 1000,
+    order: int = 2,
+    axis: int = -1,
+    forward_backward: bool = True,
+) -> npt.NDArray:
+    """Apply SOS filter to signal using butterworth design and cascaded filter.
 
-# def get_blocks(
-#     series,
-#     columns,
-#     block_size,
-#     block_stride
-# ):
-#     series = series.copy()
-#     series = series[columns]
-#     series = series.values
-#     series = series.astype(np.float32)
+    Args:
+        data (npt.NDArray): Signal
+        lowcut (float|None): Lower cutoff in Hz. Defaults to None.
+        highcut (float|None): Upper cutoff in Hz. Defaults to None.
+        sample_rate (float): Sampling rate in Hz Defaults to 1000 Hz.
+        order (int, optional): Filter order. Defaults to 2.
+        forward_backward (bool, optional): Apply filter forward and backwards. Defaults to True.
 
-#     block_count = math.ceil(len(series) / block_size)
-
-#     series = np.pad(series, pad_width=[[0, block_count*block_size-len(series)], [0, 0]])
-
-#     block_begins = list(range(0, len(series), block_stride))
-#     block_begins = [x for x in block_begins if x+block_size <= len(series)]
-
-#     blocks = []
-#     for begin in block_begins:
-#         values = series[begin:begin+block_size]
-#         blocks.append({'begin': begin, 'end': begin+block_size, 'values': values})
-#     # END FOR
-#     return blocks
+    Returns:
+        npt.NDArray: Filtered signal
+    """
+    sos = get_butter_sos(lowcut=lowcut, highcut=highcut, sample_rate=sample_rate, order=order)
+    if forward_backward:
+        return sps.sosfiltfilt(sos, data, axis=axis)
+    return sps.sosfilt(sos, data, axis=axis)

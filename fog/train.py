@@ -1,6 +1,7 @@
 import os
 from typing import cast
 import tensorflow as tf
+import tensorflow_ranking as tfr
 import numpy.typing as npt
 import wandb
 from .model import fog_model
@@ -12,6 +13,7 @@ logger = setup_logger(__name__)
 
 
 def gen_loss_function():
+    """Generate loss function w/ mask (valid + mask)."""
     ce = tf.keras.losses.BinaryCrossentropy(reduction='none')
     def loss_function(real, output, name='loss_function'):
         loss = ce(tf.expand_dims(real[:, :, 0:3], axis=-1), tf.expand_dims(output, axis=-1)) # Example shape (32, 864, 3)
@@ -25,7 +27,7 @@ def gen_loss_function():
     return loss_function
 
 def train(params: TrainParams):
-
+    """Train FoG model"""
     params.seed = set_random_seed(params.seed)
     logger.info(f"Random seed {params.seed}")
 
@@ -96,7 +98,10 @@ def train(params: TrainParams):
         )
         optimizer = tf.keras.optimizers.Adam(scheduler)
         loss = gen_loss_function()
-        metrics = [tf.keras.metrics.CategoricalAccuracy(name="acc")]
+        metrics = [
+            tf.keras.metrics.CategoricalAccuracy(name="acc"),
+            tfr.keras.metrics.MeanAveragePrecisionMetric(name="map")
+        ]
 
         model.compile(loss=loss, optimizer=optimizer, metrics=metrics)
         model.summary(print_fn=logger.info)
@@ -144,3 +149,12 @@ def train(params: TrainParams):
         model.save(tf_model_path)
 
     # END WITH
+
+
+if __name__ == "__main__":
+    train(
+        params=TrainParams(
+            ds_path="./datasets",
+            job_dir="./results/fog"
+        )
+    )

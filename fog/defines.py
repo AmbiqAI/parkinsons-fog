@@ -25,21 +25,21 @@ class TrainParams(BaseModel):
 
     # Train params
     learning_rate = Field(default=1e-3, description="Learning rate")
-    batch_size: int = Field(default=32, description="Batch size")
+    batch_size: int = Field(default=64, description="Batch size")
     buffer_size: int = Field(default=2000, description="Buffer size")
-    steps_per_epoch: int = Field(default=64, description="Steps per epoch")
-    epochs: int = Field(default=50, description="Number of epochs")
+    steps_per_epoch: int = Field(default=150, description="Steps per epoch")
+    epochs: int = Field(default=150, description="Number of epochs")
     val_metric: Literal["loss", "acc", "f1"] = Field(
         "loss", description="Performance metric"
     )
 
     # Model params
     model_dim: int = Field(default=80, description="Model dimension")
-    block_size: int = Field(default=6228, description="Block size")
-    patch_size: int = Field(default=18, description="Patch size")
+    block_size: int = Field(default=3888, description="Block size")
+    patch_size: int = Field(default=9, description="Patch size")
     num_encoders: int = Field(default=2, description="# encoder layers")
     num_lstms: int = Field(default=2, description="# LSTM layers")
-    num_heads: int = Field(default=2, description="# transformer heads")
+    num_heads: int = Field(default=4, description="# transformer heads")
     dropout: float = Field(default=0, description="Dropout rate")
     weights_file: Path | None = Field(None, description="Path to a checkpoint weights to load")
 

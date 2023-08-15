@@ -24,7 +24,9 @@
         }
     },
 
-    "runArgs": [ "--gpus", "all"],
+    "hostRequirements": {
+        "gpu": "optional"
+    },
 
     "mounts": [
         "source=${localEnv:HOME}${localEnv:USERPROFILE}/tensorflow_datasets,target=/home/vscode/tensorflow_datasets,type=bind,consistency=cached"

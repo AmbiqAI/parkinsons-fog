@@ -27,7 +27,10 @@ orjson = "^3.9.2"
 pydantic-argparse = "^0.8.0"
 kaggle = "^1.5.15"
 wandb = "^0.15.5"
+tensorflow-ranking = "^0.5.3"
 
 [tool.poetry.group.dev.dependencies]
 ipython = "^8.14.0"
+ipykernel = "^6.25.1"
+jupyter = "^1.0.0"
 

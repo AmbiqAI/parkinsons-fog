@@ -74,6 +74,7 @@ def fog_model(
     params: FogParams,
     num_classes: int
 ) -> tf.keras.Model:
+    """Custom FoG model using transformer-based model w/ patches"""
     y = fog_encoder(
         model_dim=params.model_dim,
         block_size=params.block_size,
